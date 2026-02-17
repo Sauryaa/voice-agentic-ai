@@ -1,0 +1,256 @@
+:root {
+  --bg: #f4f8fb;
+  --panel: rgba(255, 255, 255, 0.86);
+  --line: #d6e3ef;
+  --text: #12304d;
+  --muted: #43627d;
+  --brand: #005daa;
+  --brand-2: #0d8bd8;
+  --accent: #1f7a8c;
+  --interviewee: #ecf8ff;
+  --agent: #eef4ff;
+  --shadow: 0 14px 36px rgba(0, 41, 77, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 15%, #d9efff 0%, transparent 40%), radial-gradient(circle at 82% 20%, #daf6ef 0%, transparent 36%), var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", sans-serif;
+  overflow-x: hidden;
+}
+
+.bg-shape {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(0.5px);
+  z-index: -1;
+}
+
+.bg-shape-a {
+  width: 320px;
+  height: 320px;
+  right: -90px;
+  top: 120px;
+  background: linear-gradient(140deg, rgba(13, 139, 216, 0.2), rgba(0, 93, 170, 0.15));
+}
+
+.bg-shape-b {
+  width: 260px;
+  height: 260px;
+  left: -70px;
+  bottom: 80px;
+  background: linear-gradient(160deg, rgba(31, 122, 140, 0.22), rgba(13, 139, 216, 0.14));
+}
+
+.shell {
+  width: min(980px, 92vw);
+  margin: 32px auto;
+  display: grid;
+  gap: 16px;
+}
+
+.header-card {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.95), rgba(239, 248, 255, 0.88));
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--brand);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+h1 {
+  margin: 6px 0 6px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.35rem, 2.2vw, 1.9rem);
+  line-height: 1.2;
+}
+
+.subcopy {
+  margin: 0;
+  color: var(--muted);
+  max-width: 68ch;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.controls-panel {
+  padding: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: "IBM Plex Sans", sans-serif;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: white;
+}
+
+.btn-accent {
+  background: linear-gradient(135deg, #0f8b7a, #1f7a8c);
+  color: white;
+}
+
+.btn-neutral {
+  background: #e8eef6;
+  color: #20496f;
+}
+
+.btn.recording {
+  background: linear-gradient(135deg, #c4302b, #eb5a4d);
+}
+
+.text-form {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.text-form input {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 0.97rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.text-form input:focus {
+  outline: 2px solid rgba(0, 93, 170, 0.2);
+  border-color: var(--brand-2);
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.log-link {
+  font-size: 0.9rem;
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hidden {
+  display: none;
+}
+
+.chat-panel {
+  padding: 14px;
+}
+
+.chat-list {
+  display: grid;
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.message {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  animation: fade-up 200ms ease;
+}
+
+.message .label {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #56718a;
+  font-weight: 700;
+}
+
+.message p {
+  margin: 0;
+  line-height: 1.42;
+}
+
+.message.agent {
+  background: var(--agent);
+}
+
+.message.interviewee {
+  background: var(--interviewee);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    margin: 16px auto;
+    gap: 10px;
+  }
+
+  .header-card,
+  .controls-panel,
+  .chat-panel {
+    border-radius: 14px;
+  }
+
+  .text-form {
+    grid-template-columns: 1fr;
+  }
+}
