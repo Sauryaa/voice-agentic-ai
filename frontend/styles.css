@@ -1,0 +1,200 @@
+:root {
+  --bg: #f1f4f7;
+  --panel: #ffffff;
+  --panel-border: #d5dde6;
+  --text-main: #1a2a3a;
+  --text-muted: #5b6b7b;
+  --accent: #1f6f8b;
+  --accent-strong: #15546a;
+  --warning: #b45309;
+  --success: #0f766e;
+  --bar-idle: #c8d4df;
+  --bar-active: #1f6f8b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(160deg, #edf2f6 0%, #e5edf3 100%);
+  color: var(--text-main);
+  font-family: "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
+}
+
+.app-shell {
+  width: min(980px, calc(100% - 2rem));
+  margin: 1.5rem auto 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.04);
+}
+
+h1,
+h2 {
+  margin: 0 0 0.5rem;
+}
+
+p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.meter-row,
+.mode-row,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.mode-row {
+  margin-bottom: 0.9rem;
+}
+
+button,
+select {
+  font: inherit;
+  border: 1px solid #c3cfda;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  background: #fff;
+  color: var(--text-main);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+#startBtn,
+#recordBtn,
+#nextBtn,
+#downloadBtn {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+#recordBtn.recording {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+#resetBtn {
+  border-color: #c1c7d0;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #cfd8e2;
+  background: #f8fbfd;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.status-pill.active {
+  border-color: #b2d8e0;
+  color: var(--success);
+  background: #f0fdfa;
+}
+
+.audio-meter {
+  margin-top: 0.7rem;
+  height: 68px;
+  border-radius: 10px;
+  border: 1px solid #d3dbe5;
+  background: #f8fafc;
+  display: flex;
+  align-items: end;
+  gap: 0.35rem;
+  padding: 0.7rem;
+}
+
+.meter-bar {
+  flex: 1;
+  min-width: 8px;
+  height: 10%;
+  border-radius: 6px 6px 3px 3px;
+  background: var(--bar-idle);
+  transition: height 80ms linear, background-color 120ms linear;
+}
+
+.meta-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.4rem;
+  color: var(--text-muted);
+}
+
+#currentPrompt {
+  font-size: 1.02rem;
+}
+
+.transcript {
+  margin-top: 0.5rem;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #dde5ed;
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: #fcfdff;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.turn {
+  border: 1px solid #dbe5ee;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+}
+
+.turn.agent {
+  border-left: 4px solid var(--accent);
+}
+
+.turn.interviewee {
+  border-left: 4px solid #64748b;
+}
+
+.turn-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    width: calc(100% - 1rem);
+    margin-top: 0.75rem;
+  }
+
+  .audio-meter {
+    gap: 0.2rem;
+    padding: 0.5rem;
+  }
+}

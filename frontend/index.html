@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Health Interview Prototype</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="panel">
+        <h1>Voice Health Interview Prototype</h1>
+        <p>
+          Structured agenda-guided interview capture for headache history. This tool
+          records responses, supports adaptive clarification, and exports session logs
+          as JSON.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>Audio Input Check</h2>
+        <p class="muted">
+          Enable microphone access and speak to verify input level before starting.
+        </p>
+        <div class="meter-row">
+          <button id="enableMicBtn" type="button">Enable Microphone</button>
+          <span id="micStatus" class="status-pill">Microphone not enabled</span>
+        </div>
+        <div id="audioMeter" class="audio-meter" aria-label="Audio input level meter"></div>
+      </section>
+
+      <section class="panel controls-panel">
+        <div class="mode-row">
+          <label for="modeSelect">Interview Mode</label>
+          <select id="modeSelect">
+            <option value="user_controlled">User-controlled</option>
+            <option value="agent_controlled">Agent-controlled</option>
+          </select>
+        </div>
+
+        <div class="button-row">
+          <button id="startBtn" type="button">Start Interview</button>
+          <button id="recordBtn" type="button" disabled>Record</button>
+          <button id="nextBtn" type="button" disabled>Next Question</button>
+          <button id="downloadBtn" type="button" disabled>Download JSON</button>
+          <button id="resetBtn" type="button">Reset Session</button>
+        </div>
+
+        <div class="meta-grid">
+          <div><strong>Session ID:</strong> <code id="sessionId">-</code></div>
+          <div><strong>Status:</strong> <span id="sessionStatus">idle</span></div>
+          <div><strong>Backend:</strong> <span id="backendStatus">not checked</span></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Current Prompt</h2>
+        <p id="currentPrompt">Interview not started.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Transcript</h2>
+        <div id="transcript" class="transcript"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
