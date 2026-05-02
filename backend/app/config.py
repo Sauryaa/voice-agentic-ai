@@ -15,11 +15,19 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     stt_language_code: str = "en-US"
-    silence_timeout_seconds: int = 3
+    silence_timeout_seconds: float = 1.5
+    max_recording_seconds: int = 900
+    question_bank_path: str = ""
+
+    recaptcha_site_key: str = ""
+    recaptcha_expected_action: str = "start_interview"
+    recaptcha_min_score: float = 0.5
+    recaptcha_verify_timeout_seconds: float = 5.0
 
     max_clarifications_per_question: int = 2
     minimum_answer_word_count: int = 5
     gemini_temperature: float = 0.1
+    gemini_question_temperature: float = 0.3
 
     # Optional: when true, the agent can add short acknowledgments before next prompts.
     include_acknowledgment_turns: bool = False
@@ -37,6 +45,10 @@ class Settings(BaseSettings):
         if cleaned == "*":
             return ["*"]
         return [origin.strip() for origin in cleaned.split(",") if origin.strip()]
+
+    @property
+    def recaptcha_enabled(self) -> bool:
+        return bool(self.recaptcha_site_key.strip())
 
 
 @lru_cache

@@ -38,6 +38,10 @@ body {
   box-shadow: 0 8px 24px rgba(17, 24, 39, 0.04);
 }
 
+.hidden {
+  display: none;
+}
+
 h1,
 h2 {
   margin: 0 0 0.5rem;
@@ -63,6 +67,28 @@ p {
 
 .mode-row {
   margin-bottom: 0.9rem;
+}
+
+.captcha-section {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  border: 1px dashed #c8d4df;
+  border-radius: 12px;
+  background: #f9fcff;
+}
+
+.captcha-widget {
+  min-height: 0;
+}
+
+.captcha-widget:empty {
+  display: none;
+}
+
+.captcha-status {
+  font-size: 0.92rem;
 }
 
 button,

@@ -1,10 +1,14 @@
-const SILENCE_TIMEOUT_MS = 3000;
+const DEFAULT_SILENCE_TIMEOUT_MS = 1500;
+const DEFAULT_MAX_RECORDING_MS = 15 * 60 * 1000;
 const MIN_RECORDING_MS = 1200;
 const SILENCE_THRESHOLD = 0.018;
 
 const elements = {
   enableMicBtn: document.getElementById("enableMicBtn"),
   micStatus: document.getElementById("micStatus"),
+  captchaSection: document.getElementById("captchaSection"),
+  recaptchaWidget: document.getElementById("recaptchaWidget"),
+  captchaStatus: document.getElementById("captchaStatus"),
   modeSelect: document.getElementById("modeSelect"),
   startBtn: document.getElementById("startBtn"),
   recordBtn: document.getElementById("recordBtn"),
@@ -29,15 +33,27 @@ const state = {
   sourceNode: null,
   meterRafId: null,
   silenceRafId: null,
+  maxRecordingTimerId: null,
   recorder: null,
   recordingPromise: null,
   isRecording: false,
   stopOnSilence: false,
   recordStartedAt: 0,
   lastVoiceDetectedAt: 0,
+  maxRecordingMs: DEFAULT_MAX_RECORDING_MS,
   agentLoopRunning: false,
   abortAgentLoop: false,
   meterBars: [],
+  silenceTimeoutMs: DEFAULT_SILENCE_TIMEOUT_MS,
+  captcha: {
+    enabled: false,
+    siteKey: "",
+    action: "start_interview",
+    token: "",
+    loaded: false,
+    loadError: "",
+    scriptLoadingPromise: null,
+  },
 };
 
 init();
@@ -46,6 +62,7 @@ function init() {
   buildMeterBars(16);
   bindEvents();
   syncButtons();
+  void loadPublicConfig();
   checkBackendHealth();
 }
 
@@ -99,6 +116,159 @@ function bindEvents() {
   elements.resetBtn.addEventListener("click", async () => {
     await resetSession();
   });
+}
+
+async function loadPublicConfig() {
+  try {
+    const config = await apiJson("/api/public-config", { method: "GET" });
+    state.silenceTimeoutMs = Math.max(
+      500,
+      Number(config.silence_timeout_seconds || DEFAULT_SILENCE_TIMEOUT_MS / 1000) * 1000,
+    );
+    state.maxRecordingMs = Math.max(
+      10000,
+      Number(config.max_recording_seconds || DEFAULT_MAX_RECORDING_MS / 1000) * 1000,
+    );
+    state.captcha.enabled = Boolean(config.recaptcha_enabled && config.recaptcha_site_key);
+    state.captcha.siteKey = config.recaptcha_site_key || "";
+    state.captcha.action = config.recaptcha_expected_action || "start_interview";
+    state.captcha.loadError = "";
+
+    if (state.captcha.enabled) {
+      elements.captchaSection.classList.remove("hidden");
+      setCaptchaStatus("Loading access verification...");
+      try {
+        await loadRecaptchaScript();
+        setCaptchaStatus("Verification ready.");
+      } catch (error) {
+        state.captcha.loadError = error.message || "Failed to load reCAPTCHA.";
+        setCaptchaStatus("Verification could not load. Refresh the page and try again.");
+      }
+    } else {
+      elements.captchaSection.classList.add("hidden");
+      setCaptchaStatus("Verification disabled.");
+    }
+  } catch (error) {
+    state.captcha.enabled = true;
+    state.captcha.siteKey = "";
+    state.captcha.action = "start_interview";
+    state.captcha.loadError = error.message || "Public configuration unavailable.";
+    elements.captchaSection.classList.remove("hidden");
+    setCaptchaStatus("Configuration unavailable. Refresh the page and try again.");
+  } finally {
+    state.captcha.loaded = !state.captcha.enabled || !state.captcha.loadError;
+    syncButtons();
+  }
+}
+
+function loadRecaptchaScript() {
+  if (window.grecaptcha?.enterprise?.execute) {
+    return waitForRecaptchaReady();
+  }
+
+  if (state.captcha.scriptLoadingPromise) {
+    return state.captcha.scriptLoadingPromise;
+  }
+
+  state.captcha.scriptLoadingPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-recaptcha-script="true"]');
+    if (existing) {
+      if (
+        existing.dataset.recaptchaLoaded === "true" ||
+        existing.readyState === "complete" ||
+        existing.readyState === "loaded"
+      ) {
+        waitForRecaptchaReady().then(resolve).catch(reject);
+        return;
+      }
+      existing.addEventListener(
+        "load",
+        () => {
+          existing.dataset.recaptchaLoaded = "true";
+          waitForRecaptchaReady().then(resolve).catch(reject);
+        },
+        { once: true },
+      );
+      existing.addEventListener("error", () => reject(new Error("Failed to load reCAPTCHA.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(
+      state.captcha.siteKey,
+    )}`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.recaptchaScript = "true";
+    script.onload = () => {
+      script.dataset.recaptchaLoaded = "true";
+      waitForRecaptchaReady().then(resolve).catch(reject);
+    };
+    script.onerror = () => reject(new Error("Failed to load reCAPTCHA."));
+    document.head.appendChild(script);
+  });
+
+  return state.captcha.scriptLoadingPromise;
+}
+
+function waitForRecaptchaReady() {
+  return new Promise((resolve, reject) => {
+    const enterprise = window.grecaptcha?.enterprise;
+    if (!enterprise?.ready) {
+      reject(new Error("reCAPTCHA Enterprise is not available."));
+      return;
+    }
+
+    enterprise.ready(resolve);
+  });
+}
+
+function setCaptchaStatus(text) {
+  if (elements.captchaStatus) {
+    elements.captchaStatus.textContent = text;
+  }
+}
+
+function resetRecaptcha() {
+  state.captcha.token = "";
+  if (state.captcha.enabled) {
+    setCaptchaStatus("Verification ready.");
+  }
+}
+
+async function executeRecaptcha() {
+  if (!state.captcha.enabled) {
+    return undefined;
+  }
+
+  if (!state.captcha.siteKey) {
+    throw new Error("Access verification is not configured.");
+  }
+
+  setCaptchaStatus("Running access verification...");
+  try {
+    await loadRecaptchaScript();
+
+    const enterprise = window.grecaptcha?.enterprise;
+    if (!enterprise?.execute) {
+      throw new Error("reCAPTCHA Enterprise is not available.");
+    }
+
+    const token = await enterprise.execute(state.captcha.siteKey, {
+      action: state.captcha.action,
+    });
+
+    if (!token) {
+      throw new Error("Access verification did not return a token.");
+    }
+
+    state.captcha.token = token;
+    setCaptchaStatus("Verification complete.");
+    return token;
+  } catch (error) {
+    setCaptchaStatus("Verification failed. Refresh the page and try again.");
+    throw error;
+  }
 }
 
 async function checkBackendHealth() {
@@ -226,8 +396,9 @@ function syncButtons() {
   const hasSession = Boolean(state.sessionId);
   const isCompleted = state.status === "completed";
   const userControlled = state.mode === "user_controlled";
+  const captchaLoaded = !state.captcha.enabled || state.captcha.loaded;
 
-  elements.startBtn.disabled = hasSession;
+  elements.startBtn.disabled = hasSession || !captchaLoaded;
   elements.recordBtn.disabled = !hasSession || !userControlled || isCompleted;
   elements.nextBtn.disabled = !hasSession || !userControlled || isCompleted;
   elements.downloadBtn.disabled = !hasSession;
@@ -245,13 +416,26 @@ function syncButtons() {
 async function startInterview() {
   state.mode = elements.modeSelect.value;
 
+  if (state.captcha.enabled && !state.captcha.loaded) {
+    throw new Error("Access verification is not ready.");
+  }
+
   await ensureMicrophone();
   setMicStatus("Microphone ready", true);
 
+  const recaptchaToken = await executeRecaptcha();
+
   const payload = await apiJson("/api/session/start", {
     method: "POST",
-    body: JSON.stringify({ mode: state.mode }),
+    body: JSON.stringify({
+      mode: state.mode,
+      recaptcha_token: recaptchaToken,
+    }),
   });
+
+  if (state.captcha.enabled) {
+    resetRecaptcha();
+  }
 
   state.sessionId = payload.session_id;
   setSessionStatus(payload.status);
@@ -430,6 +614,7 @@ async function beginRecording({ stopOnSilence }) {
 
     recorder.addEventListener("stop", () => {
       stopSilenceDetection();
+      stopMaxRecordingTimer();
       state.isRecording = false;
       state.stopOnSilence = false;
       state.recorder = null;
@@ -449,6 +634,7 @@ async function beginRecording({ stopOnSilence }) {
   state.lastVoiceDetectedAt = Date.now();
 
   recorder.start(250);
+  startMaxRecordingTimer();
 
   if (state.stopOnSilence) {
     startSilenceDetection();
@@ -507,7 +693,7 @@ function startSilenceDetection() {
 
     if (
       recordingElapsedMs >= MIN_RECORDING_MS &&
-      silenceElapsedMs >= SILENCE_TIMEOUT_MS &&
+      silenceElapsedMs >= state.silenceTimeoutMs &&
       state.recorder &&
       state.recorder.state !== "inactive"
     ) {
@@ -525,6 +711,22 @@ function stopSilenceDetection() {
   if (state.silenceRafId) {
     cancelAnimationFrame(state.silenceRafId);
     state.silenceRafId = null;
+  }
+}
+
+function startMaxRecordingTimer() {
+  stopMaxRecordingTimer();
+  state.maxRecordingTimerId = window.setTimeout(() => {
+    if (state.recorder && state.recorder.state !== "inactive") {
+      state.recorder.stop();
+    }
+  }, state.maxRecordingMs);
+}
+
+function stopMaxRecordingTimer() {
+  if (state.maxRecordingTimerId) {
+    window.clearTimeout(state.maxRecordingTimerId);
+    state.maxRecordingTimerId = null;
   }
 }
 
@@ -600,7 +802,9 @@ function renderTranscript(turns) {
     meta.className = "turn-meta";
     const questionLabel = turn.question_id ? `Q${turn.question_id}` : "Session";
     const timestamp = new Date(turn.timestamp).toLocaleTimeString();
-    meta.textContent = `${turn.turn_index}. ${turn.speaker} | ${turn.type} | ${questionLabel} | ${timestamp}`;
+    const speakerLabel = turn.speaker_label || turn.speaker;
+    const featureLabel = turn.feature ? ` | ${turn.feature}` : "";
+    meta.textContent = `${turn.turn_index}. ${speakerLabel} | ${turn.type} | ${questionLabel}${featureLabel} | ${timestamp}`;
 
     const text = document.createElement("div");
     text.textContent = turn.text;
@@ -644,6 +848,7 @@ async function resetSession() {
   if (state.recorder && state.recorder.state !== "inactive") {
     state.recorder.stop();
   }
+  stopMaxRecordingTimer();
 
   window.speechSynthesis?.cancel();
 
@@ -652,6 +857,7 @@ async function resetSession() {
   elements.sessionId.textContent = "-";
   elements.transcript.innerHTML = "";
   setCurrentPrompt("Interview not started.");
+  resetRecaptcha();
 
   syncButtons();
 }

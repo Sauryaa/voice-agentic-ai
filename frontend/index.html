@@ -30,6 +30,17 @@
       </section>
 
       <section class="panel controls-panel">
+        <div id="captchaSection" class="captcha-section hidden">
+          <div>
+            <h2>Access Verification</h2>
+            <p class="muted">
+              Verification runs automatically before starting the interview.
+            </p>
+          </div>
+          <div id="recaptchaWidget" class="captcha-widget" aria-hidden="true"></div>
+          <div id="captchaStatus" class="captcha-status muted">Verification not loaded.</div>
+        </div>
+
         <div class="mode-row">
           <label for="modeSelect">Interview Mode</label>
           <select id="modeSelect">
@@ -67,3 +78,4 @@
     <script src="app.js"></script>
   </body>
 </html>
+

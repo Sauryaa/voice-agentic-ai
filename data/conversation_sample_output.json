@@ -1,0 +1,24 @@
+{
+    "dialogue": [
+        {
+            "feature": "Overview",
+            "question": "Please describe the headache that brings you in today.",
+            "answer": "Oh, doctor, thank you for seeing me. Well, I've been having these terrible headaches for about three years now, and they always wake me up in the middle of the night, usually really early in the morning, like 3 or 4 AM. It's always on the left side of my head, right around my temple, and it's just a dull ache. It's not like a throbbing pain or anything, just really persistent.\n\nThe worst part is, it lasts for a good couple of hours even after I'm fully awake. It happens most nights, too, which is just exhausting. It's not like those migraine headaches where you feel sick to your stomach or can't stand the light, and I don't get watery eyes or anything like that. It's just... the headache. And it's really getting to me."
+        },
+        {
+            "feature": "Laterality",
+            "question": "You mentioned your headaches are always on the left side. Is it always on the same side, or does it ever switch to the right, or affect both sides?",
+            "answer": "Yes, it's always on the left side. It never switches to the right or affects both sides; it's consistently just the left temple."
+        },
+        {
+            "feature": "Intensity",
+            "question": "If you don't take any medication, on a scale of 0 to 10, where 0 is no pain and 10 is the worst pain imaginable, how would you rate the intensity of your average headache?",
+            "answer": "Hmm, without medication... I'd say it's usually around a 6 or 7. It's enough to really wake me up and keep me from going back to sleep, and it just hangs around for hours. It's not like screaming pain, but it's really uncomfortable and very annoying."
+        },
+        {
+            "feature": "Imaging",
+            "question": "Have you had any MRI or CT scans of your head?",
+            "answer": "Yes, I had a brain MRI. They said it didn't show anything abnormal, no strange structures or anything like that. Everything looked normal."
+        }
+    ]
+}

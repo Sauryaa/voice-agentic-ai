@@ -1,38 +1,28 @@
 # Voice Health Interview Prototype
 
-Web-based voice chatbot prototype for an agenda-guided headache interview.
+Voice-based, agenda-guided Mayo Clinic prototype for collecting a structured headache history. The FastAPI backend serves a static browser UI, manages interview state, calls Google Cloud Speech-to-Text for transcription, uses Vertex AI Gemini for natural question phrasing and answer completeness checks, and exports reviewable JSON logs.
 
-- Backend: FastAPI (Python)
-- Speech transcription: Google Cloud Speech-to-Text
-- Adaptive follow-up logic: Vertex AI Gemini
-- Frontend: static HTML/CSS/JavaScript with browser microphone APIs
-- Deployment target: Cloud Run
+## Project Overview
 
-## What this prototype does
+- Interview agenda: 10 headache questions from the supervisor XLSX schema (`Feature`, `Question`).
+- Base persona: headache specialist role-play instructions from `base prompt instructions.txt`.
+- Flow: one question at a time, with concise clarification before moving forward when answers are incomplete.
+- Logs: download JSON in the sample-compatible `{"dialogue": [...]}` structure, including `feature`, original `question`, `actual_question_asked`, `answer`, and `conversation_narrative`.
+- Recording: browser recording caps at 15 minutes and agent-controlled mode moves forward after 1.5 seconds of silence.
+- Voice utilities: `GET /api/tts/voices` and `python3 -m backend.list_tts_voices` list Google Cloud Text-to-Speech voices.
 
-- Runs an 8-question headache interview in fixed order.
-- Supports two modes:
-  - `user_controlled`: user starts/stops recording each answer.
-  - `agent_controlled`: browser speaks each prompt, auto-records, and stops after ~3 seconds of silence.
-- Uses Gemini to decide if an answer is complete or needs clarification.
-- Stores structured turn-by-turn JSON transcript in-memory per session.
-- Exports transcript using **Download JSON** (pretty-printed indented JSON).
-- Includes a live microphone input test meter.
+## Tech Stack
 
-## Question set
+- Backend: Python, FastAPI, Uvicorn, Pydantic settings.
+- Frontend: static HTML, CSS, JavaScript, Web Audio API, MediaRecorder API, browser speech synthesis.
+- Speech-to-text: Google Cloud Speech-to-Text.
+- LLM: Vertex AI Gemini 2.5 Flash.
+- Text-to-speech voice inventory: Google Cloud Text-to-Speech voice listing API.
+- Deployment: Docker, Google Cloud Run, optional Cloud Build and Artifact Registry.
 
-1. Can you briefly tell me about the headache that makes you come in today?
-2. Other than the headache, have you noticed any weakness, numbness or problems with balance or coordination?
-3. Do your headaches tend to start on one or both sides of the head? If one side, does it go to the other side as well when it is severe?
-4. How would you describe your headaches? How do they usually feel?
-5. If you did not take any medication, how would you rate the pain intensity of your average headache from 0 (meaning No Pain) to 10 (meaning Worst Pain Imaginable)?
-6. How long does your typical headache last?
-7. What medications and on what dosage are you currently taking for headache? Let's start with the medications you take as needed.
-8. Do you take any medications on a regular basis for headache, as prevention?
+## Project Structure
 
-## Project structure
-
-```
+```text
 backend/
   app/
     main.py
@@ -40,146 +30,196 @@ backend/
     routes/
       health.py
       interview.py
+      public_config.py
     services/
-      speech_to_text.py
       gemini_agent.py
       interview_manager.py
-    models/
-      schemas.py
+      speech_to_text.py
+      text_to_speech.py
     prompts/
       interview_prompts.py
+    models/
+      schemas.py
+  list_tts_voices.py
   requirements.txt
 frontend/
   index.html
   styles.css
   app.js
+data/
+  headache_questions-ForVoicePrototyping.xlsx
+  base prompt instructions.txt
+  conversation_sample_output.json
 .env.example
 Dockerfile
 cloudbuild.yaml
+deploy.sh
 ```
 
-## Prerequisites
-
-- Python 3.11+
-- Google Cloud project with APIs enabled:
-  - Vertex AI API
-  - Cloud Speech-to-Text API
-- Application Default Credentials for local development:
+## Setup
 
 ```bash
-gcloud auth application-default login
-gcloud config set project voice-agentic-ai-487022
-```
-
-## Local setup
-
-1. Create and activate a virtual environment.
-2. Install dependencies.
-3. Copy `.env.example` to `.env` and adjust values if needed.
-4. Run FastAPI server.
-
-```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
+.venv/bin/pip install -r backend/requirements.txt
 cp .env.example .env
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+For local testing with the supervisor XLSX, set `QUESTION_BANK_PATH` in `.env`:
+
+```bash
+QUESTION_BANK_PATH=data/headache_questions-ForVoicePrototyping.xlsx
+```
+
+If `QUESTION_BANK_PATH` is empty or unavailable, the app uses the same 10-question fallback agenda embedded in `backend/app/prompts/interview_prompts.py`.
+
+## Environment Variables
+
+- `GOOGLE_CLOUD_PROJECT`: Google Cloud project ID.
+- `GOOGLE_CLOUD_LOCATION`: Vertex AI region, for example `us-central1`.
+- `GEMINI_MODEL`: Gemini model name, default `gemini-2.5-flash`.
+- `STT_LANGUAGE_CODE`: Speech-to-Text language, default `en-US`.
+- `SILENCE_TIMEOUT_SECONDS`: silence wait before auto-stop, default `1.5`.
+- `MAX_RECORDING_SECONDS`: max recording/session capture length, default `900`.
+- `QUESTION_BANK_PATH`: optional XLSX path with `Feature` and `Question` columns.
+- `MAX_CLARIFICATIONS_PER_QUESTION`: max follow-ups before moving forward.
+- `MINIMUM_ANSWER_WORD_COUNT`: heuristic fallback threshold when Gemini is unavailable.
+- `GEMINI_TEMPERATURE`: answer-evaluation temperature.
+- `GEMINI_QUESTION_TEMPERATURE`: question-phrasing temperature.
+- `INCLUDE_ACKNOWLEDGMENT_TURNS`: optionally log short acknowledgments.
+- `CORS_ORIGINS`: comma-separated allowed origins, default `*`.
+- `RECAPTCHA_SITE_KEY`: enables reCAPTCHA Enterprise when set.
+- `RECAPTCHA_EXPECTED_ACTION`, `RECAPTCHA_MIN_SCORE`, `RECAPTCHA_VERIFY_TIMEOUT_SECONDS`: reCAPTCHA settings.
+
+Keep real values in `.env` only. `.env.example` is intentionally safe to commit and contains placeholders.
+
+## Run Locally
+
+```bash
+source .venv/bin/activate
 uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 Open `http://localhost:8080`.
 
-## Environment variables
-
-See `.env.example`. Key values:
-
-- `GOOGLE_CLOUD_PROJECT=voice-agentic-ai-487022`
-- `GOOGLE_CLOUD_LOCATION=us-central1`
-- `GEMINI_MODEL=gemini-2.5-flash`
-- `CORS_ORIGINS=*` (development default)
-
-## API endpoints
-
-- `GET /health`
-- `POST /api/session/start`
-- `POST /api/transcribe`
-- `POST /api/interview/respond`
-- `POST /api/interview/next`
-- `GET /api/session/{session_id}/log`
-- `GET /api/session/{session_id}/download`
-
-## JSON logging notes
-
-Transcript JSON includes session metadata, ordered turns, speaker labels, question IDs, turn type, and completion status.
-
-No confidence field is included in this prototype because a stable and interpretable confidence definition was not established across all stages.
-
-## Agent-controlled mode note
-
-The "auto-stop after silence" behavior is a browser-side approximation based on Web Audio API amplitude thresholding plus a 3-second silence timer. It is practical for prototype use but not production-grade VAD.
-
-## Deploying the second prototype
-
-This project includes `deploy.sh` to publish a new container image and deploy it as a new revision of an existing Cloud Run service (same service name, same URL).
-
-### Required runtime service account
-
-Use service account:
-
-- `voice-agentic-ai-runner@voice-agentic-ai-487022.iam.gserviceaccount.com`
-
-Grant runtime roles:
-
-- `roles/aiplatform.user`
-- `roles/speech.client`
-- `roles/secretmanager.secretAccessor`
-
-### One-command deploy (local Docker + Artifact Registry + Cloud Run)
-
-From project root:
+Useful checks:
 
 ```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/api/public-config
+curl "http://localhost:8080/api/tts/voices?language_code=en-US"
+python3 -m backend.list_tts_voices --language-code en-US
+```
+
+## Test The Interview Flow
+
+1. Start the local server and open the UI.
+2. Click **Enable Microphone** and verify the meter moves.
+3. Click **Start Interview**.
+4. In user-controlled mode, record one answer at a time. In agent-controlled mode, the browser speaks a prompt, records, and auto-stops after silence.
+5. Confirm the prompt does not advance until the backend marks the answer complete or the clarification limit is reached.
+6. Click **Download JSON** and verify the file has:
+
+```json
+{
+  "dialogue": [
+    {
+      "feature": "Overview",
+      "question": "Can you briefly tell me about the headache that makes you come in today?",
+      "actual_question_asked": "Can you briefly tell me about the headache that makes you come in today?",
+      "answer": "...",
+      "conversation_narrative": ["Agent: ...", "Interviewee: ..."]
+    }
+  ]
+}
+```
+
+You can also inspect the full session log, including turn timestamps and speaker labels:
+
+```bash
+curl http://localhost:8080/api/session/SESSION_ID/log
+```
+
+## Google Cloud Run Deployment
+
+The app is Cloud Run-ready as a single container: Uvicorn runs FastAPI, and FastAPI serves the static frontend from `frontend/`.
+
+Enable required APIs:
+
+```bash
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
+  aiplatform.googleapis.com \
+  speech.googleapis.com \
+  texttospeech.googleapis.com \
+  recaptchaenterprise.googleapis.com
+```
+
+Create a runtime service account:
+
+```bash
+export PROJECT_ID="YOUR_PROJECT_ID"
+export RUNTIME_SERVICE_ACCOUNT="voice-agentic-ai-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud iam service-accounts create voice-agentic-ai-runner \
+  --display-name="Voice interview Cloud Run runtime" \
+  --project="${PROJECT_ID}"
+
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --role="roles/aiplatform.user"
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --role="roles/speech.client"
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --role="roles/recaptchaenterprise.agent"
+```
+
+The Text-to-Speech voice listing endpoint uses Application Default Credentials and the Cloud Text-to-Speech API. Google documents `voices:list` as requiring the `cloud-platform` OAuth scope.
+
+Deploy from source:
+
+```bash
+export PROJECT_ID="YOUR_PROJECT_ID"
+export REGION="us-central1"
+export SERVICE_NAME="voice-agentic-ai"
+export RUNTIME_SERVICE_ACCOUNT="voice-agentic-ai-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud config set project "${PROJECT_ID}"
+
+gcloud run deploy "${SERVICE_NAME}" \
+  --source . \
+  --region "${REGION}" \
+  --allow-unauthenticated \
+  --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=*,SILENCE_TIMEOUT_SECONDS=1.5,MAX_RECORDING_SECONDS=900,QUESTION_BANK_PATH=data/headache_questions-ForVoicePrototyping.xlsx"
+```
+
+If reCAPTCHA Enterprise is required, append:
+
+```text
+,RECAPTCHA_SITE_KEY=YOUR_SITE_KEY,RECAPTCHA_EXPECTED_ACTION=start_interview,RECAPTCHA_MIN_SCORE=0.5
+```
+
+## Deploy With deploy.sh
+
+```bash
+export PROJECT_ID="YOUR_PROJECT_ID"
+export REGION="us-central1"
+export SERVICE_NAME="voice-agentic-ai"
+export RUNTIME_SERVICE_ACCOUNT="voice-agentic-ai-runner@${PROJECT_ID}.iam.gserviceaccount.com"
 ./deploy.sh
 ```
 
-Use a custom tag:
+The script builds the Docker image, pushes it to Artifact Registry, and deploys FastAPI/Uvicorn to Cloud Run. It passes `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CORS_ORIGINS`, `SILENCE_TIMEOUT_SECONDS`, `MAX_RECORDING_SECONDS`, and optional reCAPTCHA settings as runtime environment variables.
 
-```bash
-./deploy.sh v2
-./deploy.sh v2.1
-```
+## Notes
 
-`deploy.sh` performs these steps:
-
-1. Verifies `gcloud` and `docker`.
-2. Sets the project to `voice-agentic-ai-487022`.
-3. Lists Cloud Run services in `us-central1` for service-name verification.
-4. Verifies service `voice-agentic-ai` exists before deploy.
-5. Ensures Artifact Registry repository `voice-agentic-ai` exists (creates it if missing).
-6. Configures Docker auth for `us-central1-docker.pkg.dev`.
-7. Builds image locally with Docker.
-8. Pushes image to Artifact Registry.
-9. Deploys a new revision to Cloud Run with `--allow-unauthenticated`.
-
-### Helper commands
-
-List Cloud Run services in region:
-
-```bash
-gcloud run services list --region=us-central1 --project=voice-agentic-ai-487022
-```
-
-Create Artifact Registry repository if needed:
-
-```bash
-gcloud artifacts repositories create voice-agentic-ai \
-  --repository-format=docker \
-  --location=us-central1 \
-  --description="Docker images for voice-agentic-ai Cloud Run deployments" \
-  --project=voice-agentic-ai-487022
-```
-
-Artifact Registry image path format used by the script:
-
-```text
-us-central1-docker.pkg.dev/voice-agentic-ai-487022/voice-agentic-ai/voice-agentic-ai:<TAG>
-```
+- Session state is in memory. Logs are lost if the container restarts or traffic lands on another instance.
+- Browser text-to-speech is used for speaking interview prompts; Google Cloud Text-to-Speech voice listing is available for selecting future server-side TTS voices.
+- Do not commit `.env` or service account keys.

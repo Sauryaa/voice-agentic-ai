@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from backend.app.config import Settings
 from backend.app.models.schemas import (
+    ConversationOutput,
+    DialogueEntry,
     InterviewRespondResponse,
     NextQuestionResponse,
     PromptPayload,
@@ -16,7 +18,8 @@ from backend.app.models.schemas import (
 )
 from backend.app.prompts.interview_prompts import (
     DEFAULT_CLARIFICATION_PROMPT,
-    INTERVIEW_QUESTIONS,
+    InterviewQuestion,
+    load_interview_questions,
 )
 from backend.app.services.gemini_agent import GeminiInterviewAgent
 
@@ -32,6 +35,7 @@ class SessionState:
     turn_counter: int = 0
     turns: list[Turn] = field(default_factory=list)
     answers_by_question: dict[int, list[str]] = field(default_factory=dict)
+    actual_questions_by_question: dict[int, str] = field(default_factory=dict)
     clarification_attempts: dict[int, int] = field(default_factory=dict)
 
 
@@ -39,7 +43,7 @@ class InterviewManager:
     def __init__(self, settings: Settings, gemini_agent: GeminiInterviewAgent) -> None:
         self.settings = settings
         self.gemini_agent = gemini_agent
-        self.questions = INTERVIEW_QUESTIONS
+        self.questions = load_interview_questions(settings.question_bank_path)
         self._sessions: dict[str, SessionState] = {}
         self._lock = RLock()
 
@@ -47,18 +51,14 @@ class InterviewManager:
         with self._lock:
             session_id = str(uuid4())
             created_at = datetime.now(UTC)
-            first_prompt = PromptPayload(
-                question_id=1,
-                type="question",
-                text=self.questions[0],
-            )
-
             state = SessionState(
                 session_id=session_id,
                 created_at=created_at,
                 mode=mode,
-                active_prompt=first_prompt,
             )
+            first_prompt = self._build_question_prompt(state, question_index=0)
+            state.active_prompt = first_prompt
+
             self._append_turn(
                 state,
                 speaker="agent",
@@ -90,7 +90,11 @@ class InterviewManager:
 
             question_id = state.active_prompt.question_id
             question_index = question_id - 1
-            question_text = self.questions[question_index]
+            question = self.questions[question_index]
+            actual_question_asked = state.actual_questions_by_question.get(
+                question_id,
+                state.active_prompt.text,
+            )
 
             self._append_turn(
                 state,
@@ -107,7 +111,9 @@ class InterviewManager:
 
             evaluation = self.gemini_agent.evaluate_answer(
                 question_id=question_id,
-                question_text=question_text,
+                feature=question.feature,
+                question_text=question.question,
+                actual_question_asked=actual_question_asked,
                 latest_answer=clean_text,
                 cumulative_answer=cumulative_answer,
                 clarification_attempts=attempts,
@@ -122,6 +128,8 @@ class InterviewManager:
                 follow_up = evaluation.follow_up_question or DEFAULT_CLARIFICATION_PROMPT
                 clarification_prompt = PromptPayload(
                     question_id=question_id,
+                    feature=question.feature,
+                    original_question=question.question,
                     type="clarification",
                     text=follow_up,
                 )
@@ -168,20 +176,7 @@ class InterviewManager:
             state.current_question_index = question_index + 1
 
             if state.current_question_index >= len(self.questions):
-                state.status = "completed"
-                state.active_prompt = None
-                completion_prompt = PromptPayload(
-                    question_id=None,
-                    type="completion",
-                    text="Interview complete. Thank you for sharing these details.",
-                )
-                self._append_turn(
-                    state,
-                    speaker="agent",
-                    turn_type="completion",
-                    text=completion_prompt.text,
-                    question_id=None,
-                )
+                completion_prompt = self._complete_session(state)
                 return InterviewRespondResponse(
                     session_id=session_id,
                     status=state.status,
@@ -193,12 +188,9 @@ class InterviewManager:
                     interview_complete=True,
                 )
 
-            next_question_id = state.current_question_index + 1
-            next_question_text = self.questions[state.current_question_index]
-            next_prompt = PromptPayload(
-                question_id=next_question_id,
-                type="question",
-                text=next_question_text,
+            next_prompt = self._build_question_prompt(
+                state,
+                question_index=state.current_question_index,
             )
             state.active_prompt = next_prompt
 
@@ -206,8 +198,8 @@ class InterviewManager:
                 state,
                 speaker="agent",
                 turn_type="question",
-                text=next_question_text,
-                question_id=next_question_id,
+                text=next_prompt.text,
+                question_id=next_prompt.question_id,
             )
 
             return InterviewRespondResponse(
@@ -236,18 +228,16 @@ class InterviewManager:
 
             if not force:
                 if state.active_prompt is None:
-                    question_id = state.current_question_index + 1
-                    state.active_prompt = PromptPayload(
-                        question_id=question_id,
-                        type="question",
-                        text=self.questions[state.current_question_index],
+                    state.active_prompt = self._build_question_prompt(
+                        state,
+                        question_index=state.current_question_index,
                     )
                     self._append_turn(
                         state,
                         speaker="agent",
                         turn_type="question",
                         text=state.active_prompt.text,
-                        question_id=question_id,
+                        question_id=state.active_prompt.question_id,
                     )
 
                 return NextQuestionResponse(
@@ -260,20 +250,7 @@ class InterviewManager:
 
             state.current_question_index += 1
             if state.current_question_index >= len(self.questions):
-                state.status = "completed"
-                state.active_prompt = None
-                completion_prompt = PromptPayload(
-                    question_id=None,
-                    type="completion",
-                    text="Interview complete. Thank you for sharing these details.",
-                )
-                self._append_turn(
-                    state,
-                    speaker="agent",
-                    turn_type="completion",
-                    text=completion_prompt.text,
-                    question_id=None,
-                )
+                completion_prompt = self._complete_session(state)
                 return NextQuestionResponse(
                     session_id=session_id,
                     status=state.status,
@@ -282,11 +259,9 @@ class InterviewManager:
                     interview_complete=True,
                 )
 
-            next_question_id = state.current_question_index + 1
-            next_prompt = PromptPayload(
-                question_id=next_question_id,
-                type="question",
-                text=self.questions[state.current_question_index],
+            next_prompt = self._build_question_prompt(
+                state,
+                question_index=state.current_question_index,
             )
             state.active_prompt = next_prompt
             self._append_turn(
@@ -294,7 +269,7 @@ class InterviewManager:
                 speaker="agent",
                 turn_type="question",
                 text=next_prompt.text,
-                question_id=next_question_id,
+                question_id=next_prompt.question_id,
             )
 
             return NextQuestionResponse(
@@ -314,13 +289,55 @@ class InterviewManager:
                 mode=state.mode,
                 status=state.status,
                 turns=list(state.turns),
+                dialogue=self._build_dialogue(state),
             )
+
+    def get_conversation_output(self, session_id: str) -> ConversationOutput:
+        with self._lock:
+            state = self._get_session_state(session_id)
+            return ConversationOutput(dialogue=self._build_dialogue(state))
 
     def _get_session_state(self, session_id: str) -> SessionState:
         state = self._sessions.get(session_id)
         if state is None:
             raise KeyError(f"Session not found: {session_id}")
         return state
+
+    def _build_question_prompt(self, state: SessionState, *, question_index: int) -> PromptPayload:
+        question_id = question_index + 1
+        question = self.questions[question_index]
+        actual_question = self.gemini_agent.compose_question(
+            question_id=question_id,
+            feature=question.feature,
+            question_text=question.question,
+            prior_dialogue=self._prior_dialogue_text(state),
+        )
+        state.actual_questions_by_question[question_id] = actual_question
+
+        return PromptPayload(
+            question_id=question_id,
+            feature=question.feature,
+            original_question=question.question,
+            type="question",
+            text=actual_question,
+        )
+
+    def _complete_session(self, state: SessionState) -> PromptPayload:
+        state.status = "completed"
+        state.active_prompt = None
+        completion_prompt = PromptPayload(
+            question_id=None,
+            type="completion",
+            text="Interview complete. Thank you for sharing these details.",
+        )
+        self._append_turn(
+            state,
+            speaker="agent",
+            turn_type="completion",
+            text=completion_prompt.text,
+            question_id=None,
+        )
+        return completion_prompt
 
     def _append_turn(
         self,
@@ -331,14 +348,51 @@ class InterviewManager:
         text: str,
         question_id: int | None,
     ) -> None:
+        feature = self._question_for_id(question_id).feature if question_id else None
         state.turn_counter += 1
         state.turns.append(
             Turn(
                 turn_index=state.turn_counter,
                 speaker=speaker,
+                speaker_label="Agent" if speaker == "agent" else "Interviewee",
                 question_id=question_id,
+                feature=feature,
                 type=turn_type,
                 text=text,
                 timestamp=datetime.now(UTC),
             )
         )
+
+    def _build_dialogue(self, state: SessionState) -> list[DialogueEntry]:
+        dialogue: list[DialogueEntry] = []
+
+        for question_id, answers in sorted(state.answers_by_question.items()):
+            question = self._question_for_id(question_id)
+            question_turns = [turn for turn in state.turns if turn.question_id == question_id]
+            actual_question = state.actual_questions_by_question.get(question_id, question.question)
+            dialogue.append(
+                DialogueEntry(
+                    feature=question.feature,
+                    question=question.question,
+                    actual_question_asked=actual_question,
+                    answer="\n\n".join(answer.strip() for answer in answers if answer.strip()),
+                    conversation_narrative=[
+                        f"{turn.speaker_label}: {turn.text}" for turn in question_turns
+                    ],
+                )
+            )
+
+        return dialogue
+
+    def _prior_dialogue_text(self, state: SessionState) -> str:
+        lines = [
+            f"{turn.speaker_label}: {turn.text}"
+            for turn in state.turns
+            if turn.type != "completion"
+        ]
+        return "\n".join(lines[-16:])
+
+    def _question_for_id(self, question_id: int | None) -> InterviewQuestion:
+        if question_id is None:
+            raise ValueError("Question ID is required.")
+        return self.questions[question_id - 1]

@@ -12,6 +12,7 @@ from backend.app.config import get_settings
 from backend.app.limiter import limiter
 from backend.app.routes.health import router as health_router
 from backend.app.routes.interview import router as interview_router
+from backend.app.routes.public_config import router as public_config_router
 
 settings = get_settings()
 
@@ -48,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(public_config_router)
 app.include_router(interview_router)
 
 frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
